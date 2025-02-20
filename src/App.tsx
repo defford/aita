@@ -14,7 +14,9 @@ import { AnalysisCard } from './components/AnalysisCard'
 import { AnalysisResponse } from './types'
 import axios from 'axios'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://aita-backend-708myesgd-daniel-effords-projects.vercel.app'
+  : 'http://localhost:3001'
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(false)

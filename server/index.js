@@ -13,7 +13,9 @@ const allowedOrigins = [
   'http://localhost:3000',
   'https://aita-defford.vercel.app',
   'https://aita-git-main-defford.vercel.app',
-  'https://aita.vercel.app'
+  'https://aita.vercel.app',
+  'https://aita-oyu2jksx0-daniel-effords-projects.vercel.app',
+  'https://aita-mvxjgiui7-daniel-effords-projects.vercel.app'
 ];
 
 app.use(cors({
