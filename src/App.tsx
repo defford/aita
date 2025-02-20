@@ -15,7 +15,7 @@ import { AnalysisResponse } from './types'
 import axios from 'axios'
 
 const API_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://aita-backend-hx83vwa9w-daniel-effords-projects.vercel.app'
+  ? 'https://aita-backend-9py9fn7zd-daniel-effords-projects.vercel.app'
   : 'http://localhost:3001'
 
 export default function App() {
