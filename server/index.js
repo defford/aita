@@ -6,7 +6,31 @@ import OpenAI from 'openai';
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+// Configure CORS to allow Vercel domains and localhost
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://aita-defford.vercel.app',
+  'https://aita-git-main-defford.vercel.app',
+  'https://aita.vercel.app'
+];
+
+app.use(cors({
+  origin: function(origin, callback) {
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
+
 app.use(express.json());
 
 console.log('Available environment variables:', {
@@ -126,6 +150,11 @@ The user's response was completely reasonable given the situation. The other par
     console.error('General error:', error);
     res.status(500).json({ error: error.message });
   }
+});
+
+// Add a health check endpoint
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'AITA API is running' });
 });
 
 const PORT = process.env.PORT || 3001;
