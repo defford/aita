@@ -15,9 +15,16 @@ const allowedOrigins = [
   'https://aita-git-main-defford.vercel.app',
   'https://aita.vercel.app',
   'https://aita-oyu2jksx0-daniel-effords-projects.vercel.app',
-  'https://aita-mvxjgiui7-daniel-effords-projects.vercel.app'
+  'https://aita-mvxjgiui7-daniel-effords-projects.vercel.app',
+  'https://aita-h7ao65vmc-daniel-effords-projects.vercel.app'
 ];
 
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+// Configure CORS middleware
 app.use(cors({
   origin: function(origin, callback) {
     // allow requests with no origin (like mobile apps or curl requests)
@@ -29,137 +36,77 @@ app.use(cors({
     }
     return callback(null, true);
   },
-  methods: ['GET', 'POST'],
-  credentials: true
+  methods: ['GET', 'POST', 'OPTIONS'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
 app.use(express.json());
 
-console.log('Available environment variables:', {
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? 'Set' : 'Not set',
-  OPENAI_KEY: process.env.OPENAI_KEY ? 'Set' : 'Not set'
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
 });
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_KEY || process.env.OPENAI_API_KEY_EXPORTED
-});
-
-if (!openai.apiKey) {
-  console.error('No OpenAI API key found. Please set OPENAI_API_KEY environment variable.');
-  process.exit(1);
-}
-
-const PERSONALITIES = {
-  traditionalist: "I'm a firm believer in traditional values, respect, and doing things the 'right' way. Family values and social etiquette are very important to me. I tend to judge situations based on whether they follow established norms and show proper respect for traditions and authority.",
-  
-  free_spirit: "I believe life is too short for rigid rules. I value personal freedom, self-expression, and living authentically above social conventions. I judge situations based on whether people are being true to themselves and respecting others' freedom to do the same.",
-  
-  pragmatist: "I focus on practical outcomes and efficiency. I don't care much for drama or emotional arguments - what matters is what works. I judge situations based on their practical consequences and whether people are being sensible.",
-  
-  peace_keeper: "I hate conflict and believe harmony is the most important thing. I always try to see both sides and find middle ground. I judge situations based on whether people are making an effort to get along and avoid unnecessary drama.",
-  
-  tough_love: "I believe people need to hear the hard truth and toughen up. Life isn't fair, and coddling people doesn't help them grow. I judge situations based on whether people are taking responsibility and handling things like adults.",
-  
-  optimist: "I believe in giving people the benefit of the doubt and looking for the best in every situation. Most conflicts are just misunderstandings that can be resolved with good communication. I judge situations based on people's intentions rather than just their actions.",
-  
-  skeptic: "I question everything and don't take things at face value. People often have hidden motives, and there's usually more to the story. I judge situations by looking for what might not be said and considering alternative explanations.",
-  
-  justice_seeker: "I have a strong sense of fairness and believe everyone should be treated equally. I can't stand double standards or people taking advantage of others. I judge situations based on whether everyone is being treated fairly and getting what they deserve.",
-  
-  nurturer: "I believe in supporting and caring for others, especially those who are vulnerable or struggling. Empathy and understanding are crucial. I judge situations based on how people's emotional needs are being considered and met.",
-  
-  straight_shooter: "I tell it like it is and don't sugarcoat things. I value honesty and directness over politeness. I judge situations based on whether people are being straightforward and honest with each other."
-};
 
 app.post('/api/analyze', async (req, res) => {
-  const { story } = req.body;
-  
-  if (!story) {
-    return res.status(400).json({ error: 'No story provided' });
-  }
-
   try {
-    const responses = {};
+    const { story } = req.body;
     
-    for (const [personality, perspective] of Object.entries(PERSONALITIES)) {
+    if (!story) {
+      return res.status(400).json({ error: 'Story is required' });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: 'OpenAI API key is not configured' });
+    }
+
+    const personalities = {
+      traditionalist: "You are a traditionalist who values conventional wisdom and established norms.",
+      free_spirit: "You are a free spirit who believes in personal freedom and unconventional solutions.",
+      pragmatist: "You are a pragmatist who focuses on practical outcomes rather than ideological positions.",
+      peace_keeper: "You are a peace keeper who seeks harmony and understanding between conflicting parties.",
+      tough_love: "You are a tough love advocate who believes in hard truths and personal responsibility.",
+      optimist: "You are an optimist who looks for the best in people and situations.",
+      skeptic: "You are a skeptic who questions assumptions and looks for hidden motives.",
+      justice_seeker: "You are a justice seeker who prioritizes fairness and equality.",
+      nurturer: "You are a nurturer who emphasizes emotional well-being and personal growth.",
+      straight_shooter: "You are a straight shooter who values direct communication and honesty."
+    };
+
+    const results = {};
+    
+    for (const [key, persona] of Object.entries(personalities)) {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: `${persona} Analyze this AITA (Am I The Asshole) story and provide your judgment. Your response should be in this format: {"verdict": "YTA/NTA/UNDECIDED", "explanation": "your explanation here"}`
+          },
+          { role: "user", content: story }
+        ]
+      });
+
       try {
-        const completion = await openai.chat.completions.create({
-          model: "gpt-4",
-          messages: [
-            { 
-              role: "system", 
-              content: `${perspective}
-
-You are analyzing an AITA (Am I The Asshole?) story. Provide your analysis in this exact format:
-
-[USER: YTA/NTA/UNDECIDED]
-[OTHERS: YTA/NTA/UNDECIDED]
-
-Then provide a brief 2-3 sentence explanation that MUST align with your verdicts:
-- If USER is YTA, explain why their actions were wrong
-- If USER is NTA, explain why their actions were reasonable
-- If OTHERS are YTA, explain why their actions were wrong
-- If OTHERS are NTA, explain why their actions were reasonable
-- Use UNDECIDED only when there's truly insufficient information
-
-Example 1:
-[USER: YTA]
-[OTHERS: NTA]
-The user's actions were clearly inappropriate and harmful. Their behavior showed a complete disregard for others' feelings and property.
-
-Example 2:
-[USER: NTA]
-[OTHERS: YTA]
-The user's response was completely reasonable given the situation. The other party's actions were inconsiderate and violated basic social norms.`
-            },
-            { role: "user", content: story }
-          ]
-        });
-        
-        const response = completion.choices[0].message.content;
-        
-        // Extract verdicts using regex
-        const userMatch = response.match(/\[USER: (YTA|NTA|UNDECIDED)\]/);
-        const othersMatch = response.match(/\[OTHERS: (YTA|NTA|UNDECIDED)\]/);
-        
-        // Get the content after removing the verdict tags
-        const content = response
-          .replace(/\[USER: (YTA|NTA|UNDECIDED)\]/, '')
-          .replace(/\[OTHERS: (YTA|NTA|UNDECIDED)\]/, '')
-          .trim();
-
-        responses[personality] = {
-          content,
-          verdicts: {
-            user: userMatch ? userMatch[1] : 'UNDECIDED',
-            others: othersMatch ? othersMatch[1] : 'UNDECIDED'
-          }
-        };
-      } catch (error) {
-        console.error(`Error with ${personality}:`, error);
-        responses[personality] = {
-          content: `Error getting ${personality}'s perspective: ${error.message}`,
-          verdicts: {
-            user: 'UNDECIDED',
-            others: 'UNDECIDED'
-          }
+        results[key] = JSON.parse(completion.choices[0].message.content);
+      } catch (e) {
+        console.error(`Failed to parse response for ${key}:`, e);
+        results[key] = {
+          verdict: "UNDECIDED",
+          explanation: "Failed to analyze from this perspective."
         };
       }
     }
 
-    res.json(responses);
+    res.json(results);
   } catch (error) {
-    console.error('General error:', error);
+    console.error('Analysis error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Add a health check endpoint
-app.get('/', (req, res) => {
-  res.json({ status: 'ok', message: 'AITA API is running' });
-});
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const port = process.env.PORT || 3001;
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
