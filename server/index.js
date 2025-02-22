@@ -61,10 +61,20 @@ try {
 
 // Story analysis endpoint
 app.post('/api/analyze', async (req, res) => {
+  // Force synchronous error logging
+  const log = (level, message, data) => {
+    const logData = JSON.stringify({ timestamp: new Date().toISOString(), level, message, ...data });
+    if (level === 'error') {
+      console.error(logData);
+    } else {
+      console.log(logData);
+    }
+  };
+
   try {
-    // Debug environment and initialization state
-    console.log('API Analysis Debug:', {
+    log('info', 'Starting analysis request', {
       environment: process.env.NODE_ENV,
+      vercelEnv: process.env.VERCEL_ENV,
       openAIKeyExists: !!process.env.OPENAI_API_KEY,
       openAIKeyLength: process.env.OPENAI_API_KEY?.length,
       openAIClientInitialized: !!openai,
@@ -72,16 +82,13 @@ app.post('/api/analyze', async (req, res) => {
         storyLength: req.body?.story?.length,
         hasStory: !!req.body?.story
       },
-      memory: {
-        heapUsed: process.memoryUsage().heapUsed / 1024 / 1024,
-        heapTotal: process.memoryUsage().heapTotal / 1024 / 1024,
-        external: process.memoryUsage().external / 1024 / 1024
-      }
+      memory: process.memoryUsage()
     });
 
     const { story } = req.body;
     
     if (!story) {
+      log('error', 'Story missing from request');
       return res.status(400).json({ 
         error: 'Story is required',
         code: 'MISSING_STORY'
@@ -89,7 +96,7 @@ app.post('/api/analyze', async (req, res) => {
     }
 
     if (!process.env.OPENAI_API_KEY) {
-      console.error('OpenAI API key not configured');
+      log('error', 'OpenAI API key not configured');
       return res.status(500).json({ 
         error: 'OpenAI API key not configured',
         code: 'MISSING_API_KEY'
@@ -97,7 +104,7 @@ app.post('/api/analyze', async (req, res) => {
     }
 
     if (!openai) {
-      console.error('OpenAI client not initialized');
+      log('error', 'OpenAI client not initialized');
       return res.status(500).json({ 
         error: 'OpenAI client not initialized',
         code: 'CLIENT_NOT_INITIALIZED'
@@ -105,7 +112,7 @@ app.post('/api/analyze', async (req, res) => {
     }
 
     try {
-      // Test OpenAI connection
+      log('info', 'Sending request to OpenAI');
       const completion = await openai.chat.completions.create({
         model: "gpt-4",
         messages: [
@@ -116,19 +123,17 @@ app.post('/api/analyze', async (req, res) => {
           { role: "user", content: story }
         ]
       });
-      console.log('OpenAI API Response:', {
-        status: 'success',
+
+      log('info', 'OpenAI request successful', {
         responseLength: JSON.stringify(completion).length,
         tokensUsed: completion.usage
       });
-
-      console.log('OpenAI test successful:', completion.choices[0].message);
 
       res.json({ 
         analysis: completion.choices[0].message.content 
       });
     } catch (openaiError) {
-      console.error('OpenAI API Error:', {
+      log('error', 'OpenAI API Error', {
         name: openaiError.name,
         message: openaiError.message,
         type: openaiError.type,
@@ -138,16 +143,17 @@ app.post('/api/analyze', async (req, res) => {
       throw openaiError;
     }
   } catch (error) {
-    console.error('Analysis error:', {
+    log('error', 'Unhandled error in analyze endpoint', {
+      name: error.name,
       message: error.message,
-      stack: error.stack,
-      name: error.name
+      stack: error.stack
     });
     
-    res.status(500).json({ 
-      error: 'Analysis failed',
-      details: error.message,
-      code: 'ANALYSIS_ERROR'
+    res.status(500).json({
+      error: {
+        message: error.message || 'A server error has occurred',
+        code: error.code || '500'
+      }
     });
   }
 });
