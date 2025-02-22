@@ -14,9 +14,46 @@ import { AnalysisCard } from './components/AnalysisCard'
 import { AnalysisResponse } from './types'
 import axios from 'axios'
 
-const API_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://aita-backend-ia5k6kstm-daniel-effords-projects.vercel.app'
-  : 'http://localhost:3001'
+// API Configuration
+const api = axios.create({
+  baseURL: import.meta.env.PROD ? 'https://aita-eta.vercel.app/api' : '/api',
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+// Add request interceptor for debugging
+api.interceptors.request.use(request => {
+  console.log('Request:', {
+    url: request.url,
+    method: request.method,
+    headers: request.headers,
+    data: request.data
+  });
+  return request;
+});
+
+// Add response interceptor for debugging
+api.interceptors.response.use(
+  response => {
+    console.log('Response:', {
+      status: response.status,
+      headers: response.headers,
+      data: response.data
+    });
+    return response;
+  },
+  error => {
+    console.error('Response error:', {
+      message: error.message,
+      status: error.response?.status,
+      headers: error.response?.headers,
+      data: error.response?.data
+    });
+    return Promise.reject(error);
+  }
+);
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(false)
@@ -26,7 +63,13 @@ export default function App() {
   const handleSubmit = async (story: string) => {
     setIsLoading(true)
     try {
-      const response = await axios.post<AnalysisResponse>(`${API_URL}/api/analyze`, { story })
+      console.log('Sending request to:', '/api/analyze')
+      const response = await api.post('/analyze', { story })
+      console.log('Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: response.data
+      })
       setResults(response.data)
     } catch (error) {
       toast({

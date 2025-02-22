@@ -31,3 +31,6 @@ server/.env
 *.sln
 *.sw?
 .vercel
+
+# Project documentation
+/docs/
