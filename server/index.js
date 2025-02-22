@@ -12,12 +12,20 @@ console.log('Starting server with environment:', {
 });
 
 // Enable CORS for all routes
-app.use(cors({
-  origin: ['https://aita-eta.vercel.app', 'http://localhost:5173'],
-  credentials: true,
+const corsOptions = {
+  origin: ['https://aita-eta.vercel.app', 'https://aita-backend.vercel.app', 'http://localhost:5173'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
+
+// Enable CORS for all routes
+app.use(cors(corsOptions));
 
 // Parse JSON bodies
 app.use(express.json());
@@ -49,26 +57,37 @@ app.post('/api/test', (req, res) => {
   res.json({ message: 'Test endpoint working' });
 });
 
-// Initialize OpenAI
+// Initialize OpenAI with better error handling
 let openai;
 try {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OpenAI API key is not configured');
+  }
   openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
+    apiKey: process.env.OPENAI_API_KEY.trim(),
+    maxRetries: 3,
+    timeout: 30000
   });
+  console.log('OpenAI client initialized successfully');
 } catch (error) {
-  console.error('Failed to initialize OpenAI:', error);
+  console.error('Failed to initialize OpenAI:', {
+    name: error.name,
+    message: error.message,
+    stack: error.stack
+  });
+  openai = null;
 }
 
 // Story analysis endpoint
-app.post('/api/analyze', async (req, res) => {
-  // Force synchronous error logging
-  const log = (level, message, data) => {
-    const logData = JSON.stringify({ timestamp: new Date().toISOString(), level, message, ...data });
-    if (level === 'error') {
-      console.error(logData);
-    } else {
-      console.log(logData);
-    }
+app.post('/api/analyze', async (req, res, next) => {
+  const log = (level, message, data = {}) => {
+    const logData = JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      ...data
+    });
+    console.log(logData);
   };
 
   try {
@@ -77,99 +96,71 @@ app.post('/api/analyze', async (req, res) => {
       vercelEnv: process.env.VERCEL_ENV,
       openAIKeyExists: !!process.env.OPENAI_API_KEY,
       openAIKeyLength: process.env.OPENAI_API_KEY?.length,
-      openAIClientInitialized: !!openai,
-      requestBody: {
-        storyLength: req.body?.story?.length,
-        hasStory: !!req.body?.story
-      },
-      memory: process.memoryUsage()
+      openAIClientInitialized: !!openai
     });
 
     const { story } = req.body;
     
     if (!story) {
-      log('error', 'Story missing from request');
       return res.status(400).json({ 
-        error: 'Story is required',
-        code: 'MISSING_STORY'
-      });
-    }
-
-    if (!process.env.OPENAI_API_KEY) {
-      log('error', 'OpenAI API key not configured');
-      return res.status(500).json({ 
-        error: 'OpenAI API key not configured',
-        code: 'MISSING_API_KEY'
+        error: {
+          message: 'Story is required',
+          code: 'MISSING_STORY'
+        }
       });
     }
 
     if (!openai) {
-      log('error', 'OpenAI client not initialized');
-      return res.status(500).json({ 
-        error: 'OpenAI client not initialized',
-        code: 'CLIENT_NOT_INITIALIZED'
-      });
+      throw new Error('OpenAI client not initialized');
     }
 
-    try {
-      log('info', 'Sending request to OpenAI');
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: "You are a helpful assistant. Analyze this story."
-          },
-          { role: "user", content: story }
-        ]
-      });
+    log('info', 'Sending request to OpenAI');
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: "You are a helpful assistant. Analyze this story."
+        },
+        { role: "user", content: story }
+      ],
+      temperature: 0.7,
+      max_tokens: 2000
+    });
 
-      log('info', 'OpenAI request successful', {
-        responseLength: JSON.stringify(completion).length,
-        tokensUsed: completion.usage
-      });
+    log('info', 'OpenAI request successful', {
+      responseLength: JSON.stringify(completion).length,
+      tokensUsed: completion.usage
+    });
 
-      res.json({ 
-        analysis: completion.choices[0].message.content 
-      });
-    } catch (openaiError) {
-      log('error', 'OpenAI API Error', {
-        name: openaiError.name,
-        message: openaiError.message,
-        type: openaiError.type,
-        status: openaiError.status,
-        stack: openaiError.stack
-      });
-      throw openaiError;
-    }
+    res.json({ 
+      analysis: completion.choices[0].message.content 
+    });
   } catch (error) {
-    log('error', 'Unhandled error in analyze endpoint', {
+    log('error', 'Analysis endpoint error', {
       name: error.name,
       message: error.message,
+      type: error.type,
       stack: error.stack
     });
-    
-    res.status(500).json({
-      error: {
-        message: error.message || 'A server error has occurred',
-        code: error.code || '500'
-      }
-    });
+    next(error);
   }
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Server error:', {
+  console.error('Global error handler:', {
+    name: err.name,
     message: err.message,
-    stack: err.stack,
-    name: err.name
+    stack: err.stack
   });
   
-  res.status(500).json({ 
-    error: 'Internal server error',
-    details: err.message,
-    code: 'SERVER_ERROR'
+  res.status(500).json({
+    error: {
+      message: 'A server error has occurred',
+      code: '500',
+      type: err.name
+    }
   });
 });
 
