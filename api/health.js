@@ -24,24 +24,28 @@ try {
   console.error('Error initializing OpenAI client:', error);
 }
 
-export default async function handler(req, res) {
+export const config = {
+  runtime: 'edge'
+};
+
+export default async function handler(request) {
   console.log('Health check request received:', {
-    method: req.method,
-    headers: req.headers,
-    url: req.url
+    method: request.method,
+    headers: request.headers,
+    url: request.url
   });
 
   try {
-    // Set CORS headers
-    const origin = req.headers.origin || 'https://aita-eta.vercel.app';
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-    // Handle preflight request
-    if (req.method === 'OPTIONS') {
+    if (request.method === 'OPTIONS') {
       console.log('Handling OPTIONS request');
-      return res.status(204).end();
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        }
+      });
     }
 
     // Check OpenAI setup
@@ -77,7 +81,18 @@ export default async function handler(req, res) {
     };
 
     console.log('Health check response:', response);
-    return res.status(200).json(response);
+    return new Response(
+      JSON.stringify(response),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        }
+      }
+    );
   } catch (error) {
     console.error('Health check error:', {
       name: error.name,
@@ -85,10 +100,21 @@ export default async function handler(req, res) {
       stack: error.stack
     });
 
-    return res.status(500).json({
-      status: 'error',
-      timestamp: new Date().toISOString(),
-      message: error.message
-    });
+    return new Response(
+      JSON.stringify({
+        status: 'error',
+        timestamp: new Date().toISOString(),
+        message: error.message
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        }
+      }
+    );
   }
 }

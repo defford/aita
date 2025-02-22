@@ -45,28 +45,56 @@ Last Updated: 2025-02-22
   - Kept Node.js version in package.json
   - Maintained simplified CORS configuration
   - Kept response format for Node.js
-- **Current Status**: Failed
-- **Error Details**:
-  - Health Check: FUNCTION_INVOCATION_FAILED (500)
-  - API Endpoint: 500 error on preflight request
-  - Frontend Error: "XMLHttpRequest cannot load due to access control checks"
-  - Backend Error: "Request failed with status code 500"
+- **Outcome**: Failed - Function invocation errors persist
 
-### Root Cause Analysis
-1. The function invocation failure suggests the serverless function is not properly initializing
-2. The error occurs before CORS handling, as we're getting 500 errors on the preflight request
-3. Possible causes:
-   - OpenAI initialization issue
-   - Module import problems
-   - Environment variable access issues
-   - Incorrect request body parsing
+#### 6. Enhanced Logging and Error Handling (Failed)
+- **Issue**: Function invocation failing before any logs
+- **Changes Made**:
+  - Moved OpenAI initialization outside request handler
+  - Added extensive logging throughout code
+  - Enhanced error responses with timestamps
+  - Improved CORS handling with dynamic origin
+- **Outcome**: Failed - FUNCTION_INVOCATION_FAILED (500)
+- **Error Details**:
+  - Health Check: Immediate 500 error
+  - API Endpoint: 500 error on preflight request
+  - No logs visible suggesting early initialization failure
+
+### Pattern Analysis
+Looking at all attempts, we can observe:
+1. The error occurs before any of our code executes (no logs visible)
+2. The issue appears to be at the function initialization level
+3. All attempts to modify runtime configuration have failed
+4. The error is consistent across both endpoints
+5. CORS isn't the root issue since we never reach our CORS handling code
 
 ### Next Steps to Try
-1. Add body-parser middleware for proper request parsing
-2. Move OpenAI initialization outside the request handler
-3. Add more detailed error logging
-4. Verify environment variables are properly set in Vercel
-5. Consider using middleware approach for CORS handling
+1. Simplify to Minimal API
+   - Create a basic endpoint without OpenAI or any dependencies
+   - Verify if the function can initialize at all
+   - Gradually add complexity back
+
+2. Alternative Deployment Approach
+   - Consider Express.js server deployment instead of serverless
+   - Try deploying to a different platform (e.g., Heroku)
+   - Test locally first to verify the code works
+
+3. Investigate Build Process
+   - Check Vercel build logs for any warnings
+   - Verify module resolution is working
+   - Test with CommonJS instead of ES modules
+
+4. Environment Setup
+   - Double-check all environment variables
+   - Verify Node.js version compatibility
+   - Test with different runtime configurations
+
+### Current Hypothesis
+The function is failing during the module initialization phase, possibly due to:
+1. ES Module compatibility issues
+2. OpenAI module resolution problems
+3. Environment variable access during cold start
+4. Memory constraints during initialization
 
 ### Environment Details
 - Frontend: https://aita-eta.vercel.app
