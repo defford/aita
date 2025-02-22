@@ -62,10 +62,21 @@ try {
 // Story analysis endpoint
 app.post('/api/analyze', async (req, res) => {
   try {
-    console.log('Received analyze request:', {
-      hasStory: !!req.body?.story,
-      hasOpenAI: !!openai,
-      hasApiKey: !!process.env.OPENAI_API_KEY
+    // Debug environment and initialization state
+    console.log('API Analysis Debug:', {
+      environment: process.env.NODE_ENV,
+      openAIKeyExists: !!process.env.OPENAI_API_KEY,
+      openAIKeyLength: process.env.OPENAI_API_KEY?.length,
+      openAIClientInitialized: !!openai,
+      requestBody: {
+        storyLength: req.body?.story?.length,
+        hasStory: !!req.body?.story
+      },
+      memory: {
+        heapUsed: process.memoryUsage().heapUsed / 1024 / 1024,
+        heapTotal: process.memoryUsage().heapTotal / 1024 / 1024,
+        external: process.memoryUsage().external / 1024 / 1024
+      }
     });
 
     const { story } = req.body;
@@ -93,23 +104,39 @@ app.post('/api/analyze', async (req, res) => {
       });
     }
 
-    // Test OpenAI connection
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: "You are a helpful assistant. Analyze this story."
-        },
-        { role: "user", content: story }
-      ]
-    });
+    try {
+      // Test OpenAI connection
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: "You are a helpful assistant. Analyze this story."
+          },
+          { role: "user", content: story }
+        ]
+      });
+      console.log('OpenAI API Response:', {
+        status: 'success',
+        responseLength: JSON.stringify(completion).length,
+        tokensUsed: completion.usage
+      });
 
-    console.log('OpenAI test successful:', completion.choices[0].message);
+      console.log('OpenAI test successful:', completion.choices[0].message);
 
-    res.json({ 
-      analysis: completion.choices[0].message.content 
-    });
+      res.json({ 
+        analysis: completion.choices[0].message.content 
+      });
+    } catch (openaiError) {
+      console.error('OpenAI API Error:', {
+        name: openaiError.name,
+        message: openaiError.message,
+        type: openaiError.type,
+        status: openaiError.status,
+        stack: openaiError.stack
+      });
+      throw openaiError;
+    }
   } catch (error) {
     console.error('Analysis error:', {
       message: error.message,
