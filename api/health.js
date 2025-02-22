@@ -8,10 +8,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 };
 
-export const config = {
-  runtime: 'nodejs'
-};
-
 export default async function handler(req, res) {
   // Handle OPTIONS request
   if (req.method === 'OPTIONS') {

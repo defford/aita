@@ -1,9 +1,5 @@
 import { OpenAI } from 'openai';
 
-export const config = {
-  runtime: 'nodejs'
-};
-
 export default async function handler(req, res) {
   // Handle OPTIONS request
   if (req.method === 'OPTIONS') {
