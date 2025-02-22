@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import { OpenAI } from 'openai';
 
 // CORS headers
 const corsHeaders = {
@@ -8,12 +8,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 };
 
-export default async function handler(req, res) {
-  // Set CORS headers
-  Object.entries(corsHeaders).forEach(([key, value]) => {
-    res.setHeader(key, value);
-  });
+export const config = {
+  runtime: 'edge'
+};
 
+export default async function handler(req) {
   try {
     // Check OpenAI setup
     let openaiStatus = 'not_configured';
@@ -41,23 +40,42 @@ export default async function handler(req, res) {
       }
     }
 
-    res.status(200).json({
-      status: 'ok',
-      environment: {
-        NODE_ENV: process.env.NODE_ENV,
-        VERCEL_ENV: process.env.VERCEL_ENV
-      },
-      openai: {
-        status: openaiStatus,
-        error: error,
-        keyConfigured: !!process.env.OPENAI_API_KEY
+    return new Response(
+      JSON.stringify({
+        status: 'ok',
+        environment: process.env.VERCEL_ENV || 'development',
+        openai: {
+          status: openaiStatus,
+          error: error,
+          keyConfigured: !!process.env.OPENAI_API_KEY
+        }
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': 'https://aita-eta.vercel.app',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        }
       }
-    });
+    );
   } catch (error) {
     console.error('Health check error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: error.message
-    });
+    return new Response(
+      JSON.stringify({
+        status: 'error',
+        message: error.message
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': 'https://aita-eta.vercel.app',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        }
+      }
+    );
   }
 }
