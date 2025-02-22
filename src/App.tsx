@@ -16,7 +16,7 @@ import axios from 'axios'
 
 // API Configuration
 const api = axios.create({
-  baseURL: import.meta.env.PROD ? 'https://aita-eta.vercel.app/api' : '/api',
+  baseURL: import.meta.env.PROD ? 'https://aita-backend.vercel.app/api' : '/api',
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
